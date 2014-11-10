@@ -32,8 +32,11 @@ import javax.enterprise.inject.Model;
 import javax.inject.Inject;
 import javax.transaction.UserTransaction;
 
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
 import org.hibernate.search.query.dsl.QueryBuilder;
 import org.infinispan.Cache;
 import org.infinispan.commons.api.BasicCache;
@@ -211,21 +214,39 @@ public class CarManager {
         return "searchresults";
     }
 
-    // TODO: create the query using BooleanQuery from Lucene
     private Query createMatchAllQuery() {
-        BooleanQuery q = null;
-        System.out.println("Lucene Query: " + q.toString() );
+        BooleanQuery q = new BooleanQuery();
+
+        if (!car.getBrand().isEmpty()) {
+            Query query = new TermQuery(new Term("brand", car.getBrand().toLowerCase()));
+            q.add(query, BooleanClause.Occur.MUST);
+        }
+        if (!car.getColor().isEmpty()) {
+            Query query = new TermQuery(new Term("color", car.getColor().toLowerCase()));
+            q.add(query, BooleanClause.Occur.MUST);
+        }
+        if (!car.getCountry().equals(Car.Country.Unused)) {
+            Query query = new TermQuery(new Term("country", car.getCountry().toString().toLowerCase()));
+            q.add(query, BooleanClause.Occur.MUST);
+        }
 
         return q;
     }
 
-    // TODO: create the query using QueryBuilder from Hibernate
     private Query crateMatchAnyQuery(SearchManager sm) {
-        QueryBuilder queryBuilder = null;
-        Query q = null;
-        System.out.println("Hibernate Query: " + q.toString() );
-
-        return q;
+        QueryBuilder queryBuilder = sm.buildQueryBuilderForClass(Car.class).get();
+        return queryBuilder
+                .bool()
+                .should(queryBuilder.keyword().onFields("brand")
+                        .matching(car.getBrand().isEmpty() ? "none" : car.getBrand())
+                        .createQuery())
+                .should(queryBuilder.keyword().onFields("color")
+                        .matching(car.getColor().isEmpty() ? "none" : car.getColor())
+                        .createQuery())
+                .should(queryBuilder.keyword().onFields("country")
+                        .matching(car.getCountry())
+                        .createQuery())
+                .createQuery();
     }
 
     public List<Car> getSearchResults() {
